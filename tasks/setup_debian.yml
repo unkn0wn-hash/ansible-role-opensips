@@ -1,0 +1,58 @@
+---
+
+- name: Opensips | Add key server
+  become: true
+  apt_key:
+    keyserver: keyserver.ubuntu.com
+    id: 049AD65B
+    state: present
+
+- name: Opensips | Add package url to source list
+  become: true
+  shell: echo "deb https://apt.opensips.org buster 2.4-releases" >/etc/apt/sources.list.d/opensips.list 
+
+- name: Opensips | Update APT Cache
+  become: true
+  apt: update_cache=yes
+  when: opensips_manage_repo
+
+- name: Opensips | Installation
+  become: true
+  apt:
+    name: "{{ opensips_debian_packages }}"
+    state: present
+  notify: Restart opensips
+
+- name: Opensips | Configure.
+  become: true
+  template:
+    src: "{{ opensips_config_template_dir }}/{{ item }}.j2"
+    dest: "{{ opensips_conf_dir }}/{{ item }}"
+    backup: true
+  with_items: "{{ opensips_conf_files }}"
+  notify: Restart opensips
+  when: opensips_install_conf
+
+- name: Opensips | Installing pexpect >= 3.3
+  pip:
+    name: https://pypi.python.org/packages/source/p/pexpect/pexpect-4.0.1.tar.gz
+
+- name: Opensips | Check if DB exist
+  become_user: postgres
+  postgresql_db:
+    login_host: "{{ opensips_db_host }}"
+    login_user: "{{ opensips_db_root_user }}"
+    login_password: "{{ opensips_db_root_pass }}"
+    name: opensips
+    state: present
+  register: database_exists
+      
+- name: Opensips | Create database
+  expect:
+    command: /usr/sbin/opensipsdbctl create
+    responses:
+      password: "{{ opensips_db_root_pass }}"
+      Install: "y"
+  run_once: true
+  notify: Restart opensips
+  when: opensips_create_db and database_exists.changed

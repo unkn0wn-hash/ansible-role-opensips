@@ -1,0 +1,24 @@
+---
+
+- name: Opensips | Clone repo
+  become: true
+  git:
+    repo: {{ opensips_cp_repo }}
+    dest: {{ opensips_cp_path }}
+    version: {{ opensips_cp_cp_version }}
+
+- name: Opensips | Config apache
+  become: true
+  template:
+    src: "{{ opensips_config_template_dir }}/{{ item }}.j2"
+    dest: "{{ opensips_apache_dir }}/{{ item }}"
+    backup: true
+  with_items: "{{ opensips_apache_conf_file }}"
+  notify: Restart apache2
+
+- name: Opensips | CP file permission
+  become: true
+  shell: "chown -R www-data:www-data {{ opensips_cp_path }}"
+
+- name: Opensips | Create OCP table
+  shell: "cd {{ opensips_cp_path }} && psql -h {{ opensips_db_host }} -U {{ opensips_db_user }} -d opensips < config/db_schema.pgsql"
